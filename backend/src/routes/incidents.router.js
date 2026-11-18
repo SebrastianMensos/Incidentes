@@ -3,7 +3,6 @@
 const express = require("express");
 
 const IncidentsService = require("../services/incidents.service");
-
 const {
   validateIncidentPayload,
   validateIncidentQuery,
@@ -13,13 +12,11 @@ const router = express.Router();
 const service = new IncidentsService();
 
 router.get("/", validateIncidentQuery, async (req, res) => {
-  const filters = {
+  const incidents = await service.getAll({
     search: req.query.search,
     category: req.query.category,
     status: req.query.status,
-  };
-
-  const incidents = await service.getAll(filters);
+  });
 
   res.status(200).json({
     count: incidents.length,
@@ -28,54 +25,56 @@ router.get("/", validateIncidentQuery, async (req, res) => {
 });
 
 router.get("/geojson", validateIncidentQuery, async (req, res) => {
-  const filters = {
+  const geoJSON = await service.getGeoJSON({
     search: req.query.search,
     category: req.query.category,
     status: req.query.status,
-  };
-
-  const geoJSON = await service.getGeoJSON(filters);
+  });
 
   res.status(200).json(geoJSON);
 });
 
 router.get("/:id", async (req, res) => {
-  const { id } = req.params;
-
-  const incident = await service.getById(id);
-
-  res.status(200).json({
-    data: incident,
-  });
+  const incident = await service.getById(req.params.id);
+  res.status(200).json({ data: incident });
 });
 
-router.post("/", validateIncidentPayload, async (req, res) => {
+router.post("/", validateIncidentPayload(), async (req, res) => {
   const newIncident = await service.create(req.body);
-
   res.status(201).json({
-    message: "Incidente registrado correctamente",
+    message: "Incidente registrado correctamente.",
     data: newIncident,
   });
 });
 
-router.patch("/:id", validateIncidentPayload, async (req, res) => {
-  const { id } = req.params;
+router.put(
+  "/:id",
+  validateIncidentPayload(),
+  async (req, res) => {
+    const updatedIncident = await service.replace(req.params.id, req.body);
+    res.status(200).json({
+      message: "Incidente reemplazado correctamente.",
+      data: updatedIncident,
+    });
+  },
+);
 
-  const updatedIncident = await service.update(id, req.body);
-
-  res.status(200).json({
-    message: "Incidente actualizado correctamente",
-    data: updatedIncident,
-  });
-});
+router.patch(
+  "/:id",
+  validateIncidentPayload({ partial: true }),
+  async (req, res) => {
+    const updatedIncident = await service.update(req.params.id, req.body);
+    res.status(200).json({
+      message: "Incidente actualizado correctamente.",
+      data: updatedIncident,
+    });
+  },
+);
 
 router.delete("/:id", async (req, res) => {
-  const { id } = req.params;
-
-  const deletedIncident = await service.delete(id);
-
+  const deletedIncident = await service.delete(req.params.id);
   res.status(200).json({
-    message: "Incidente eliminado correctamente",
+    message: "Incidente eliminado correctamente.",
     data: {
       id: deletedIncident.id,
       title: deletedIncident.title,

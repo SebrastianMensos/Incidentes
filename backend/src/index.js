@@ -1,20 +1,21 @@
-"use strict"
+"use strict";
 
-const app = require("./app")
+require("dotenv").config();
 
-const dns = require('dns');
-dns.setServers(['8.8.8.8', '8.8.4.4']);
+const dns = require("node:dns");
+const app = require("./app");
+const { connectDatabase, disconnectDatabase } = require("./config/database");
+const seedInitialData = require("./data/seed");
 
-const { connectDatabase } = require("./config/database")
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
 
-const PORT = Number(process.env.PORT) || 3000
+const PORT = Number(process.env.PORT) || 3000;
 
-async function startServer() { 
-    try {
-        await connectDatabase();
-        console.log("Conexión a la base de datos establecida");
-        
-const server= app.listen(PORT, () =>{
+async function startServer() {
+  await connectDatabase();
+  await seedInitialData();
+
+  const server = app.listen(PORT, () => {
     console.log("");
     console.log("==============SERVIDOR INCIDENTES URBANOS==============");
     console.log("API DE INCIDENTES URBANOS");
@@ -27,27 +28,39 @@ const server= app.listen(PORT, () =>{
     console.log(`Paradas: http://localhost:${PORT}/api/bus-stops`);
     console.log(`Estacionamientos: http://localhost:${PORT}/api/parkings`);
     console.log(`Camaras: http://localhost:${PORT}/api/cameras`);
-    console.log("=============RUTAS DISPONIBLES==============")
-    console.log("")
-});
+    console.log("=============RUTAS DISPONIBLES==============");
+    console.log("");
+  });
 
-// Cierre controlado, cuando el servidor lo quiera y corta la conexión con MongoDB
-    function shutdown(signal) {
-      console.log(`\nSe recibió ${signal}. Cerrando servidor...`);
-
-      server.close(() => {
-        disconnectDatabase;
-        console.log("Servidor cerrado correctamente.");
-        process.exit(0);
-      });
+  let isShuttingDown = false;
+  async function shutdown(signal) {
+    if (isShuttingDown) {
+      return;
     }
-    process.on("SIGINT", () => shutdown("SIGINT"));
-    process.on("SIGTERM", () => shutdown("SIGTERM"));
-    } catch (error) {
-    console.error("No se pudo conectar a MongoDB", error.message);
-    process.exit(1);
+    isShuttingDown = true;
+    console.log(`\nSe recibió ${signal}. Cerrando servidor...`);
+
+    server.close(async (error) => {
+      if (error) {
+        console.error("Error al cerrar el servidor:", error);
+        process.exitCode = 1;
+      }
+
+      try {
+        await disconnectDatabase();
+        console.log("Servidor cerrado correctamente.");
+      } catch (disconnectError) {
+        console.error("Error al cerrar la conexión con MongoDB:", disconnectError);
+        process.exitCode = 1;
+      }
+    });
   }
+
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
 
-startServer();
-
+startServer().catch((error) => {
+  console.error("No se pudo iniciar el servidor:", error);
+  process.exitCode = 1;
+});

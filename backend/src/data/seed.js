@@ -3,30 +3,56 @@
 require("dotenv").config();
 
 const { connectDatabase, disconnectDatabase } = require("../config/database");
+const IncidentModel = require("../models/incidents.model");
+const StationModel = require("../models/stations.model");
+const BusStopModel = require("../models/bus-stops.model");
+const ParkingModel = require("../models/parkings.model");
+const CameraModel = require("../models/cameras.model");
+const incidents = require("./incidents.seed");
+const stations = require("./stations.seed");
+const busStops = require("./bus-stops.seed");
+const parkings = require("./parkings.seed");
+const cameras = require("./cameras.seed");
 
-const IncidentModel = require("../models/incident.model");
-const seedIncidents = require("./incidents.seed");
+const seedCollections = [
+  [IncidentModel, incidents],
+  [StationModel, stations],
+  [BusStopModel, busStops],
+  [ParkingModel, parkings],
+  [CameraModel, cameras],
+];
+
+async function seedInitialData() {
+  for (const [model, records] of seedCollections) {
+    if ((await model.countDocuments()) > 0) {
+      continue;
+    }
+
+    const documents = records.map((record) => {
+      const document = { ...record };
+      delete document.id;
+      delete document.createAt;
+      return document;
+    });
+    const inserted = await model.insertMany(documents);
+    console.log(`Se insertaron ${inserted.length} registros en ${model.collection.name}.`);
+  }
+}
 
 async function runSeed() {
   try {
-    // Abrir conexión a base de datos
     await connectDatabase();
-
-    // Vacías la colección para no duplicar datos
-    await IncidentModel.deleteMany({});
-
-    // Quitamos id, createdAt, y updatedAt porque los pone MongoDB
-    const documents = seedIncidents.map(({ id, createdAt, updatedAt, ...incident }) => incident);
-
-    const inserted = await IncidentModel.insertMany(documents);
-
-    console.log(`Se insertaron los registros ${inserted.length}`);
+    await seedInitialData();
   } catch (error) {
-    console.error("Error al cargar los datos: ", error.message);
+    console.error("Error al cargar los datos iniciales:", error);
     process.exitCode = 1;
   } finally {
     await disconnectDatabase();
   }
 }
 
-runSeed();
+if (require.main === module) {
+  runSeed();
+}
+
+module.exports = seedInitialData;

@@ -1,11 +1,7 @@
 "use strict";
 
-const dns = require('dns');
-dns.setServers(['8.8.8.8', '8.8.4.4']);
-
 const mongoose = require("mongoose");
 
-// Abre la conexión con MongoDB usando la cadena del .env
 async function connectDatabase() {
   const uri = process.env.MONGODB_URI;
 
@@ -13,9 +9,19 @@ async function connectDatabase() {
     throw new Error("Falta la variable MONGODB_URI en el archivo .env");
   }
 
-  await mongoose.connect(uri);
+  try {
+    await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 10000,
+      family: 4,
+    });
+    console.log(`MongoDB conectado a la base: ${mongoose.connection.name}`);
+  } catch (error) {
+    for (const [address, server] of error.reason?.servers ?? []) {
+      console.error(address, "->", server.error?.message);
+    }
 
-  console.log(`MongoDB conectado a la base: ${mongoose.connection.name}`);
+    throw error;
+  }
 }
 
 async function disconnectDatabase() {
